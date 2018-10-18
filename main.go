@@ -41,7 +41,7 @@ func main() {
 	kingpin.Flag("discovery.ssdp", "Turn on SSDP announcement of telly to the local network $(TELLY_DISCOVERY_SSDP)").Envar("TELLY_DISCOVERY_SSDP").Default("true").BoolVar(&opts.SSDP)
 
 	// Regex/filtering flags
-	kingpin.Flag("filter.regex-inclusive", "Whether the provided regex is inclusive (whitelisting) or exclusive (blacklisting). If true (--filter.regex-inclusive), only channels matching the provided regex pattern will be exposed. If false (--no-filter.regex-inclusive), only channels NOT matching the provided pattern will be exposed. $(TELLY_FILTER_REGEX_MODE)").Envar("TELLY_FILTER_REGEX_MODE").Default("false").BoolVar(&opts.RegexInclusive)
+	kingpin.Flag("filter.regex-inclusive", "Whether the provided regex is inclusive (whitelisting) or exclusive (blacklisting). If true (--filter.regex-inclusive), only channels matching the provided regex pattern will be exposed. If false (--no-filter.regex-inclusive), only channels NOT matching the provided pattern will be exposed. $(TELLY_FILTER_REGEX_MODE)").Envar("TELLY_FILTER_REGEX_MODE").Default("true").BoolVar(&opts.RegexInclusive)
 	kingpin.Flag("filter.regex", "Use regex to filter for channels that you want. A basic example would be .*UK.*. $(TELLY_FILTER_REGEX)").Envar("TELLY_FILTER_REGEX").Default(".*").RegexpVar(&opts.Regex)
 
 	// Web flags
@@ -57,6 +57,7 @@ func main() {
 	kingpin.Flag("iptv.streams", "Number of concurrent streams allowed $(TELLY_IPTV_STREAMS)").Envar("TELLY_IPTV_STREAMS").Default("1").IntVar(&opts.ConcurrentStreams)
 	kingpin.Flag("iptv.direct", "If true, stream URLs will not be obfuscated to hide them from Plex. $(TELLY_IPTV_DIRECT)").Envar("TELLY_IPTV_DIRECT").Default("false").BoolVar(&opts.DirectMode)
 	kingpin.Flag("iptv.starting-channel", "The channel number to start exposing from. $(TELLY_IPTV_STARTING_CHANNEL)").Envar("TELLY_IPTV_STARTING_CHANNEL").Default("10000").IntVar(&opts.StartingChannel)
+	kingpin.Flag("iptv.udpxy", "Base address for udpxy. $(TELLY_IPTV_UDPXY)").Envar("TELLY_IPTV_UDPXY").Default("").StringVar(&opts.UdpxyBaseAddress)
 
 	kingpin.Version(version.Print("telly"))
 	kingpin.HelpFlag.Short('h')
@@ -123,6 +124,11 @@ func buildLineup(opts config, channels []Track) []LineupItem {
 	lineup := make([]LineupItem, 0)
 	gn := opts.StartingChannel
 
+	if (len(opts.UdpxyBaseAddress) > 0) {
+		log.Infoln("Using udpxy for Stream URL")
+	}
+
+
 	for _, track := range channels {
 
 		var finalName string
@@ -134,9 +140,15 @@ func buildLineup(opts config, channels []Track) []LineupItem {
 
 		// base64 url
 		fullTrackURI := track.URI
+
+		if (len(opts.UdpxyBaseAddress) > 0){
+			udpxyURI := strings.Replace(fullTrackURI, "udp://@", "", -1)
+			fullTrackURI = fmt.Sprintf("http://%s", opts.UdpxyBaseAddress) + "/udp/" + udpxyURI + "/"
+		}
+
 		if !opts.DirectMode {
-			trackURI := base64.StdEncoding.EncodeToString([]byte(track.URI))
-			fullTrackURI = fmt.Sprintf("http://%s/stream/%s", opts.BaseAddress.String(), trackURI)
+			fullTrackURI := base64.StdEncoding.EncodeToString([]byte(fullTrackURI))
+			fullTrackURI = fmt.Sprintf("http://%s/stream/%s", opts.BaseAddress.String(), fullTrackURI)
 		}
 
 		if strings.Contains(track.URI, ".m3u8") {

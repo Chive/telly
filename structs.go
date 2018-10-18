@@ -18,6 +18,7 @@ type config struct {
 	M3UPath           string
 	ConcurrentStreams int
 	StartingChannel   int
+	UdpxyBaseAddress  string
 
 	DeviceAuth      string
 	DeviceID        int
